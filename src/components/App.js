@@ -1,26 +1,94 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View, Animated, Easing, Dimensions } from 'react-native';
 import ajax from '../ajax';
 import DealList from './DealList';
+import DealDetail from './DealDetail';
+import SearchBar from './SearchBar';
 
 export default class App extends React.Component {
+  titleXpos = new Animated.Value(0);
   state= {
     deals: [],
+    dealsFromSearch: [],
+    currentDealId: null,
   }
+
+  animateTitle = (direction = 1) => {
+    const width = Dimensions.get('window').width - 210;
+    Animated.spring(this.titleXpos, { 
+      toValue: direction * (width / 2),
+      duration: 1000,
+      easing: Easing.ease,
+    }).start(({ finished }) => {
+      if (finished) {
+        this.animateTitle(-1, direction);
+      }
+    });
+  }
+
   async componentDidMount() {
+    this.animateTitle();
     const deals = await ajax.fetchInitialDeals();
     this.setState({ deals });
-    console.log('componentDidMount');
+  }
+
+  searchDeals = async (searchInput) => {
+    let dealsFromSearch = [];
+    if (searchInput) {
+      dealsFromSearch = await ajax.fetchDealsSearchResult(searchInput);
+    }
+    this.setState({ dealsFromSearch });
+  }
+
+
+  setCurrentDeal = (dealId) => {
+    this.setState({
+      currentDealId: dealId,
+    });
+  }
+
+  unsetCurrentDeal = () => {
+    this.setState({
+      currentDealId: null,
+    });
+  }
+
+  currentDeal = () => {
+    return this.state.deals.find((deal) => deal.key === this.state.currentDealId);
   }
 
   render() {
-    return (
-      <View style={styles.container}>
-        {this.state.deals.length > 0 ?
-          <DealList deals={this.state.deals}/> :
-          <Text style={styles.header} >Hello</Text>
-        }
-      </View>
+    if (this.state.currentDealId) {
+      return (
+        <View style={styles.main}>
+          <DealDetail
+            initialDealData={this.currentDeal()}
+            onBack={this.unsetCurrentDeal}
+          />
+        </View>
+        
+      );
+    }
+
+    const dealsToDisplay =
+      this.state.dealsFromSearch.length > 0
+        ? this.state.dealsFromSearch
+        : this.state.deals;
+
+
+    if (dealsToDisplay.length > 0) {
+      return (
+        <View style={styles.main}>
+          <SearchBar searchDeals={this.searchDeals}/>
+          <DealList deals={dealsToDisplay} onItemPress={this.setCurrentDeal}/>
+        </View>
+      );
+    }
+
+    return (  
+      <Animated.View style={[{ left: this.titleXpos }, styles.container, ]}>
+        <Text style={styles.header} >My Groupon</Text>
+      </Animated.View>
     );
   }
 }
@@ -34,5 +102,8 @@ const styles = StyleSheet.create({
   },
   header: {
     fontSize: 40,
+  },
+  main: {
+    marginTop: 30,
   }
 });
